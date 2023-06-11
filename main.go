@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v4"
@@ -35,7 +36,7 @@ type People struct {
 
 var pool *pgxpool.Pool
 
-func getAllUser(ctx *gin.Context) {
+func getAllUser() []People {
 	rows, err := pool.Query(context.Background(),"select * from user_list;")
 	// rows, err := conn.Query(context.Background(),"select * from user_list;")
 	// err = conn.QueryRow(context.Background(), "select name from user_list where id = 1;").Scan(&first_user)
@@ -60,7 +61,14 @@ func getAllUser(ctx *gin.Context) {
 		fmt.Fprintf(os.Stderr,"failed while iterating rows %v\n", err)
 	}
 
-	ctx.IndentedJSON(http.StatusOK, people)
+	return people
+}
+
+func responseAllUser(ctx *gin.Context) {
+	var peopleList []People
+	peopleList = getAllUser()
+
+	ctx.IndentedJSON(http.StatusOK, peopleList)
 }
 
 func addUser(ctx *gin.Context) {
@@ -78,6 +86,81 @@ func addUser(ctx *gin.Context) {
 	}
 
 	ctx.IndentedJSON(http.StatusOK, newUser)
+}
+
+func getUserById(id int) (People) {
+	var allUser = getAllUser()
+	var target People
+	for _, u := range allUser {
+		if u.ID == id {
+			target = u
+		}
+	}
+	return target
+}
+
+func editUser(ctx *gin.Context) {
+	id := ctx.Param("id")
+	idNum, err := strconv.Atoi(id)
+	if err != nil {
+		ctx.IndentedJSON(http.StatusBadRequest, gin.H{"message": "failed to update user infomation"})
+		return
+	}
+	user := getUserById(idNum)
+	
+	// 編集対象のユーザーが見つからなかった場合(ID0は存在しないため0が帰ってきたら取得できていないと判断)
+	if  user.ID == 0 {
+		ctx.IndentedJSON(http.StatusBadRequest, gin.H{"message": "failed to update user infomation"})
+		return
+	}
+	
+	// これが新しい状態のPeopleを入れる変数
+	var editedUser People
+	if err := ctx.BindJSON(&editedUser); err != nil {
+		ctx.IndentedJSON(http.StatusBadRequest, gin.H{"message": "failed to update user infomation"})
+		return
+	}
+	
+	pool.Exec(context.Background(), "update user_list set name=$1, age=$2 where id=$3",
+	editedUser.Name, editedUser.Age, user.ID)
+
+	ctx.IndentedJSON(http.StatusOK, editedUser)
+
+}
+
+func deleteUser(ctx *gin.Context) {
+	id := ctx.Param("id")
+	idNum, err := strconv.Atoi(id)
+
+	if err != nil {
+		ctx.IndentedJSON(http.StatusBadRequest, gin.H{"message": "failed to delete user"})
+		return
+	}
+	
+	var user = getUserById(idNum)
+	if user.ID == 0 {
+		ctx.IndentedJSON(http.StatusBadRequest, gin.H{"message": "failed to delete user"})
+		return
+	}
+	_, err = pool.Exec(context.Background(), "delete from user_list where id=$1", user.ID)
+	if err != nil {
+		ctx.IndentedJSON(http.StatusBadRequest, gin.H{"message": "failed to delete user"})
+		return
+	}
+	ctx.IndentedJSON(http.StatusOK, user)
+}
+
+func responseUserById(ctx *gin.Context) {
+	id := ctx.Param("id")
+	idNum, err := strconv.Atoi(id)
+	if err != nil {
+		ctx.IndentedJSON(http.StatusBadRequest, gin.H{"message": "failed to get user"})
+		return
+	}
+
+	user := getUserById(idNum)
+
+	ctx.IndentedJSON(http.StatusOK, user)
 }
 
 func main() {
@@ -101,10 +184,15 @@ func main() {
 		os.Exit(1)
 	}
 
+	defer pool.Close()
+
 	fmt.Println("start app")
 	router := gin.Default()
-	router.GET("/users", getAllUser)
+	router.GET("/users", responseAllUser)
+	router.GET("/users/:id", responseUserById)
 	router.POST("/users/add", addUser)
+	router.PATCH("/users/edit/:id", editUser)
+	router.PATCH("/users/delete/:id", deleteUser)
 	router.Run("localhost:9090")
 	fmt.Println("end app")
 }
