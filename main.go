@@ -165,7 +165,7 @@ func responseUserById(ctx *gin.Context) {
 
 func main() {
 	// fmt.Println("user name: " + first_user)
-	connConfig, err := pgx.ParseConfig("postgresql://root:root@localhost:5432/go_lang")
+	connConfig, err := pgx.ParseConfig(DB_URL)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to parse db config")
 		os.Exit(1)
@@ -186,6 +186,11 @@ func main() {
 
 	defer pool.Close()
 
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
 	fmt.Println("start app")
 	router := gin.Default()
 	router.GET("/users", responseAllUser)
@@ -193,6 +198,6 @@ func main() {
 	router.POST("/users/add", addUser)
 	router.PATCH("/users/edit/:id", editUser)
 	router.PATCH("/users/delete/:id", deleteUser)
-	router.Run("localhost:9090")
+	router.Run(":" + port)
 	fmt.Println("end app")
 }
