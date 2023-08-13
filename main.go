@@ -12,10 +12,6 @@ import (
 	"github.com/jackc/pgx/v4/pgxpool"
 )
 
-// とりあえずユーザーを追加する機能と一覧を取得する機能は実装した
-// Todo 多分DBへの接続をプールできるはず
-// Todo 削除、編集機能を追加
-
 // メモ プールを使用せずにDB接続する場合
 // var db_url string = "postgresql://{ホスト名}:{ポート番号}/{DB名}?user={ユーザ名}&password={パスワード}"
 // var db_url string = "postgresql://localhost:5432/go_lang?user=root&password=root"
